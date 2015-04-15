@@ -1,25 +1,74 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "PA1_template.rmd"
+author: "Travis Fell"
+date: "Tuesday, April 14, 2015"
+output: html_document
 ---
 
+##Introduction
+This documents the code and logic for the first Peer Assessment for the "Reproducible Research" course in the Coursera.org Data Science specialization. This procedure assumes that the code and the data it is being run against reside in the same working directory and that the following packages have already been downloaded and installed: 
+- dplyr
 
-## Loading and preprocessing the data
+##Load and Pre-Process data
+Before taking up any analysis, we need to 
+1. Ensure any needed packages are loaded
+2. Extract and load the data
+3. Tidy-up the data and get it ready for analysis 
+4. Disable scientific notation
+
+```{r results = "hide"}
+library(dplyr)
+unzip("activity.zip")
+activity <- read.csv("activity.csv")
+activity[,2] <- as.Date(as.character(activity[,2]))
+options(scipen=999)
+```
+
+##Identify the Mean Number of Steps Taken Each Day
+For each day, summarize the number of steps taken each day, then calculate the mean and median steps taken each day. 
+
+First, we need to group together all records by day and aggregate the results. 
+```{r}
+stepsPerDay <- aggregate(steps ~ date, data = activity, sum)
+print(stepsPerDay)
+```
+Second, we need to make a histogram of the steps/day. 
+```{r}
+hist(stepsPerDay$steps, main = "Distribution of Steps per Day", xlab = "Steps per Day")
+```
+
+Third, we need to calculate and report the mean and median of the total number of steps taken per day.  
+```{r}
+meanSteps <- mean(stepsPerDay$steps)
+medianSteps <- median(stepsPerDay$steps)
+```
+The average steps per day is `r meanSteps`. The median steps per day is `r medianSteps`. 
 
 
+##Identify the Average Daily Activity Pattern
+Plot the average number of steps per daily 5 minute interval. 
+```{r}
+stepsPerInterval <- aggregate(steps ~ interval, data = activity, mean)
+with(stepsPerInterval,
+     plot(interval, steps, type = "l")
+     )
+```
 
-## What is mean total number of steps taken per day?
+Then, identify the single interval that has the highest average number of steps. 
+``` {r}
+stepsPerInterval[which.max(stepsPerInterval[,2]),]
+```
 
+##Impute Missing Values
+First, calculate the total number of missing values.
+```{r}
+sum(is.na(activity$steps))
+```
+Second, impute data to those NA values. We will use the average of the given day to impute NA values for that day. We need to find the dates that have NA values in the steps column. 
+```{r}
+naDates <- unique(subset(activity, is.na(steps), select = date))
+```
+Then, we need to calculate the average per interval steps of the non-NA intervals.
+```{r}
 
-
-## What is the average daily activity pattern?
-
-
-
-## Imputing missing values
-
-
-
-## Are there differences in activity patterns between weekdays and weekends?
+```
