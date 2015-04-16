@@ -64,11 +64,15 @@ First, calculate the total number of missing values.
 ```{r}
 sum(is.na(activity$steps))
 ```
-Second, impute data to those NA values. We will use the average of the given day to impute NA values for that day. We need to find the dates that have NA values in the steps column. 
+Second, impute data to those NA values. We will use the average of the given interval to impute NA values for that same interval. To do this, we need to calculate the average per interval steps excluding NA values. We also need to give the results set meaningful column names. 
 ```{r}
-naDates <- unique(subset(activity, is.na(steps), select = date))
+intAve <- summarize(group_by(activity, interval), mean(steps, na.rm = TRUE))
+colnames(intAve) <- c("interval", "average")
 ```
-Then, we need to calculate the average per interval steps of the non-NA intervals.
+Then, we need to merge the activity data with the interval averages data, re-sort the results to match the activity data sorting and assign the averages for the given intervals to the date/interval conbinations that have "NA" as their value. 
 ```{r}
+mergeSet <- subset(merge(activity, intAve, by.x="interval", by.y="interval"), is.na(steps))
+mergeSet <- arrange(mergeSet, date, interval)
+activity[which(is.na(activity$steps)),1] <- mergeSet$average
+```
 
-```
