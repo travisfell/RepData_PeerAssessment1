@@ -7,7 +7,8 @@ output: html_document
 
 ##Introduction
 This documents the code and logic for the first Peer Assessment for the "Reproducible Research" course in the Coursera.org Data Science specialization. This procedure assumes that the code and the data it is being run against reside in the same working directory and that the following packages have already been downloaded and installed: 
-- dplyr
+* dplyr
+* ggplot2
 
 ##Load and Pre-Process data
 Before taking up any analysis, we need to 
@@ -18,6 +19,7 @@ Before taking up any analysis, we need to
 
 ```{r results = "hide"}
 library(dplyr)
+library(ggplot2)
 unzip("activity.zip")
 activity <- read.csv("activity.csv")
 activity[,2] <- as.Date(as.character(activity[,2]))
@@ -29,7 +31,7 @@ For each day, summarize the number of steps taken each day, then calculate the m
 
 First, we need to group together all records by day and aggregate the results. 
 ```{r}
-stepsPerDay <- aggregate(steps ~ date, data = activity, sum)
+stepsPerDay <- aggregate(steps ~ date, data = activity, sum, na.action = na.pass)
 print(stepsPerDay)
 ```
 Second, we need to make a histogram of the steps/day. 
@@ -39,8 +41,8 @@ hist(stepsPerDay$steps, main = "Distribution of Steps per Day", xlab = "Steps pe
 
 Third, we need to calculate and report the mean and median of the total number of steps taken per day.  
 ```{r}
-meanSteps <- mean(stepsPerDay$steps)
-medianSteps <- median(stepsPerDay$steps)
+meanSteps <- mean(stepsPerDay$steps, na.rm=TRUE)
+medianSteps <- median(stepsPerDay$steps, na.rm=TRUE)
 ```
 The average steps per day is `r meanSteps`. The median steps per day is `r medianSteps`. 
 
@@ -64,7 +66,7 @@ First, calculate the total number of missing values.
 ```{r}
 sum(is.na(activity$steps))
 ```
-Second, impute data to those NA values. We will use the average of the given interval to impute NA values for that same interval. To do this, we need to calculate the average per interval steps excluding NA values. We also need to give the results set meaningful column names. 
+Second, impute data to those NA values. We will use the average of the given interval to impute NA values for that same interval. To do this, we first need to calculate the average per interval steps excluding NA values. We also need to give the results set meaningful column names. 
 ```{r}
 intAve <- summarize(group_by(activity, interval), mean(steps, na.rm = TRUE))
 colnames(intAve) <- c("interval", "average")
@@ -75,4 +77,32 @@ mergeSet <- subset(merge(activity, intAve, by.x="interval", by.y="interval"), is
 mergeSet <- arrange(mergeSet, date, interval)
 activity[which(is.na(activity$steps)),1] <- mergeSet$average
 ```
+Finally, compare the mean and median of the results with imputed values to the mean and median taken at the beginning of this assignment. Use a histogram to show the new steps per day
+```{r}
+imputedStepsPerDay <- aggregate(steps ~ date, data = activity, sum)
+hist(imputedStepsPerDay$steps, main = "Distribution of Steps per Day (imputed)", xlab = "Imputed Steps per Day")
+```
+
+Now find the mean and the median of the activity data with imputed values. 
+```{r}
+meanImputedSteps <- mean(imputedStepsPerDay$steps)
+medianImputedSteps <- median(imputedStepsPerDay$steps)
+```
+Then compare the previous mean and median steps/day with the mean and median steps/day found using imputed values.
+* The original mean steps/day is `r meanSteps` and the mean imputed steps/day is `r meanImputedSteps`. The difference is `r meanSteps - meanImputedSteps`.
+* The origina median steps/day is `r medianSteps` and the median imputed steps/day is `r medianImputedSteps`. The difference is `r medianSteps - medianImputedSteps`. 
+
+##Compare Weekdays to Weekends
+This part of the analysis compares steps on weekends to steps on weekdays. To compare the two, we first need to add a factor variable to the activity data frame indicating if a day is a weekday or a weekend. 
+```{r}
+activity$day <- ifelse(weekdays(activity[,2]) == "Saturday"|weekdays(activity[,2]) == "Sunday", "Weekend","Weekday")
+activity$day <- as.factor(activity$day)
+```
+Next, we want to plot the updated activity data to show average steps taken at each interval during weekdays and weekends. 
+```{r}
+aveStepsPerDay <- summarise(group_by(activity, day, interval), mean(steps))
+colnames(aveStepsPerDay) <- c("day", "interval", "steps")
+qplot(interval, steps, data = aveStepsPerDay, facets = day~., geom = "line", main = "Weekday vs Weekend Steps by 5 minute interval")
+```
+
 
