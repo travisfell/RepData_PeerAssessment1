@@ -1,0 +1,36 @@
+---
+title: 'Peer Assessment 2: Storm Data Analysis'
+author: "Travis Fell"
+date: "Monday, April 20, 2015"
+output: html_document
+---
+
+##Synopsis
+This analysis is meant to shed light on the consequences of severe atmospheric events for public health and economic activity.  
+
+##Data Processing
+This section describes how the data for this analysis was acquired and made usable. 
+
+First, the data needs to be downloaded to a folder one level below the working directory called PA2_data. Then, read in the data. 
+
+```{r cache =TRUE}
+data <- read.csv("./PA2_data/repdata-data-StormData.csv.bz2", as.is = TRUE, stringsAsFactors = FALSE)
+
+```
+Upon reading in the data, do some intial analysis on the state of the data.
+```{r}
+dim(data)
+```
+The data has 902,297 rows and 37 columns. 
+
+Now, have a look at the first few lines records, column names and data types. 
+```{r}
+head(data)
+str(data)
+```
+Change certain data types based on the types of analyses we need to do on this data. 
+
+
+
+
+##Results
