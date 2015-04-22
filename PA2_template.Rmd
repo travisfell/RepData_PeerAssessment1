@@ -11,9 +11,12 @@ This analysis is meant to shed light on the consequences of severe atmospheric e
 ##Data Processing
 This section describes how the data for this analysis was acquired and made usable. 
 
-First, the data needs to be downloaded to a folder one level below the working directory called PA2_data. Then, read in the data. 
+First, the environment needs to be prepped by loading needed packages, turning off scientific notation. Assuming the data has been downloaded to a folder one level below the working directory called PA2_data, read in the data. 
 
-```{r cache =TRUE}
+```{r cache=TRUE}
+library(dplyr)
+library(ggplot2)
+options(scipen=999)
 data <- read.csv("./PA2_data/repdata-data-StormData.csv.bz2", as.is = TRUE, stringsAsFactors = FALSE)
 
 ```
@@ -28,9 +31,39 @@ Now, have a look at the first few lines records, column names and data types.
 head(data)
 str(data)
 ```
-Change certain data types based on the types of analyses we need to do on this data. 
-
-
-
 
 ##Results
+This section walks through the various analytical steps to address the two questions in this assignment: 
+1. Across the United States, which types of events are most harmful with respect to population health?
+2. Across the United States, which types of events have the greatest economic consequences?
+
+###Storm Impact on Public Health
+This section examines the impact of severe weather events on public health. The EVTYPE column categorizes the various types of events, so let's first examine that column and set it to a factor data type to enable later analysis. 
+```{r}
+unique(data$EVTYPE)
+data$EVTYPE <- as.factor(data$EVTYPE)
+```
+There are 985 unique types of weather events captured in this data set. To start digging into, we'll summarize the total fatalities and injuries by EVTYPE and give the resulting set meaningful column names. 
+
+```{r}
+health <- summarise(group_by(data, EVTYPE), sum(FATALITIES), sum(INJURIES))
+colnames(health) <- c("EVTYPE", "FATALITIES", "INJURIES")
+```
+Now that the health data is in a summarized, human readable format, we will start examining it's parameters to get a feel for how to continue the analysis. We will identify the total number of fatalities/injuries, examine the top 10 events by number of fatalities and injuries. 
+```{r}
+head(arrange(health, desc(FATALITIES)), 10)
+head(arrange(health, desc(INJURIES)), 10)
+```
+Now, we'll combine fatalities and injuries into a "total casualties" column then calculate each event's casualties as a percent of the whole and draw some conclusions about storm impacts on public health. 
+```{r}
+health <- mutate(health, CASUALTIES = FATALITIES + INJURIES)
+totalCasualties <- sum(health$CASUALTIES)
+health <- mutate(health, CASUALTYPERCENT = round(100 * CASUALTIES/totalCasualties, digits = 1))
+print(topCasualtyEvents <- head(arrange(health, desc(CASUALTYPERCENT)), 10))
+top10CombinedPercent <- sum(topCasualtyEvents$CASUALTYPERCENT)
+```
+Assuming that public health impact is measured by the combination of fatalities and injuries, the chart above shows that tornados are far and away the biggest threat to public health from severe weather. As the top 10 events account for `r top10CombinedPercent`% of weather-related casualties, public health and safety officials should develop contingency plans for all these events, though with emphasis on tornados.  
+
+
+
+
