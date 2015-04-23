@@ -15,6 +15,7 @@ First, the environment needs to be prepped by loading needed packages, turning o
 
 ```{r cache=TRUE}
 library(dplyr)
+library(plyr)
 library(ggplot2)
 options(scipen=999)
 data <- read.csv("./PA2_data/repdata-data-StormData.csv.bz2", as.is = TRUE, stringsAsFactors = FALSE)
@@ -38,14 +39,49 @@ This section walks through the various analytical steps to address the two quest
 2. Across the United States, which types of events have the greatest economic consequences?
 
 ###Storm Impact on Public Health
-This section examines the impact of severe weather events on public health. The EVTYPE column categorizes the various types of events, so let's first examine that column and set it to a factor data type to enable later analysis. 
+This section examines the impact of severe weather events on public health. The EVTYPE column categorizes the various types of events, so let's first examine that column to find the unique values where there is a public health impact (fatalities greater than 0 or injuries greater than 0).  
 ```{r}
-unique(data$EVTYPE)
-data$EVTYPE <- as.factor(data$EVTYPE)
+
+uniqueEvents <- unique(subset(data, FATALITIES >0|INJURIES > 0, select = "EVTYPE"))
+#uniqueEvents[order(uniqueEvents$EVTYPE)]
+arrange(uniqueEvents, EVTYPE)
 ```
-There are 985 unique types of weather events captured in this data set. To start digging into, we'll summarize the total fatalities and injuries by EVTYPE and give the resulting set meaningful column names. 
+There are 985 unique types of weather events captured in this data set, but 220 that have a fatality or injury. In examining these 220 events, it is apparent that many are near matches to each other, which probably resulted from data entry errors. So, for events that have any fatalities or injuries we need to map each unique value to the actual value as documented in the "NATIONAL WEATHER SERVICE INSTRUCTION 10-1605" document (available at this link: https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf). 
 
 ```{r}
+#create a separate column to modify by copying and pasting EVTYPE
+data$noaaEvent <- data$EVTYPE
+#modify non-standard event names to NOAA standard event names
+data$noaaEvent <- gsub("AVALANCE", "AVALANCHE", data$noaaEvent)
+data$noaaEvent <- gsub("BLACK ICE", "ICE STORM", data$noaaEvent)
+data$noaaEvent <- gsub("blowing snow", "BLIZZARD", data$noaaEvent, ignore.case = TRUE)
+data$noaaEvent <- gsub("BRUSH FIRE", "WILDFIRE", data$noaaEvent)
+data$noaaEvent <- gsub("^Coastal Flooding", "COASTAL FLOOD", data$noaaEvent, ignore.case = TRUE)
+data$noaaEvent <- gsub("Coastal Storm", "TROPICAL STORM", data$noaaEvent, ignore.case = TRUE)
+data$noaaEvent <- gsub("COASTALSTORM", "TROPICAL STORM", data$noaaEvent)
+data$noaaEvent <- gsub("^COLD", "COLD/WIND CHILL", data$noaaEvent, ignore.case = TRUE)
+data$noaaEvent <- gsub("DROUGHT/EXCESSIVE HEAT", "DROUGHT", data$noaaEvent)
+data$noaaEvent <- gsub("DROWNING", "FLOOD", data$noaaEvent)
+data$noaaEvent <- gsub("^/DRY MI(C|R)OBURST/", "THUNDERSTORM WIND", data$noaaEvent)
+data$noaaEvent <- gsub("Dust Devil", "DUST DEVIL", data$noaaEvent)
+data$noaaEvent <- gsub("EXCESSIVE RAINFALL", "HEAVY RAIN", data$noaaEvent)
+data$noaaEvent <- gsub("EXCESSIVE SNOW", "HEAVY SNOW", data$noaaEvent)
+data$noaaEvent <- gsub("EX.*COLD", "EXTREME COLD/WIND CHILL", data$noaaEvent , ignore.case = TRUE)
+data$noaaEvent <- gsub("EXTREME HEAT", "EXCESSIVE HEAT", data$noaaEvent)
+data$noaaEvent <- gsub("EXTREME WINDCHILL", "EXTREME COLD/WIND CHILL", data$noaaEvent)
+data$noaaEvent <- gsub("FALLING SNOW/ICE", "HEAVY SNOW", data$noaaEvent)
+data$noaaEvent <- gsub("^FLASH FLOOD", "FLASH FLOOD", data$noaaEvent)
+data$noaaEvent <- gsub("^FLOOD", "FLOOD", data$noaaEvent)
+
+uniqueNoaaEvents <- unique(subset(data, FATALITIES >0|INJURIES > 0, select = "noaaEvent"))
+head(arrange(uniqueNoaaEvents, noaaEvent), 20)
+```
+
+
+To start digging into, we'll summarize the total fatalities and injuries by EVTYPE and give the resulting set meaningful column names. 
+
+```{r}
+#data$EVTYPE <- as.factor(data$EVTYPE)
 health <- summarise(group_by(data, EVTYPE), sum(FATALITIES), sum(INJURIES))
 colnames(health) <- c("EVTYPE", "FATALITIES", "INJURIES")
 ```
