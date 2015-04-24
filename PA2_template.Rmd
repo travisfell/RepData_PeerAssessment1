@@ -33,31 +33,100 @@ head(data)
 str(data)
 ```
 
-##Results
-This section walks through the various analytical steps to address the two questions in this assignment: 
-1. Across the United States, which types of events are most harmful with respect to population health?
-2. Across the United States, which types of events have the greatest economic consequences?
+Both analysis in this assignement look at results from certain weather events. So we'll look more closely at the EVTYPE column. Specifically, we'll find the unique list of those events that have any public health and/or economic impact, and ensure those events match the standard event descriptions from NOAA. For this analysis, we'll assume that events with at least 1 fatality or one injury have a public health impact and events with greater than 0 property damage or greater than 0 crop damage have an economic impact.
 
-###Storm Impact on Public Health
-This section examines the impact of severe weather events on public health. The EVTYPE column categorizes the various types of events, so let's first examine that column to find the unique values where there is a public health impact (fatalities greater than 0 or injuries greater than 0).  
 ```{r}
+unique(data$PROPDMGEXP) #understand what is in this column
+unique(data$CROPDMGEXP) #understand what is in this column
 
-uniqueEvents <- unique(subset(data, FATALITIES >0|INJURIES > 0, select = "EVTYPE"))
+uniqueEvents <- unique(subset(data, FATALITIES >0|INJURIES > 0|PROPDMG > 0|CROPDMG > 0, select = "EVTYPE"))
 #uniqueEvents[order(uniqueEvents$EVTYPE)]
-arrange(uniqueEvents, EVTYPE)
+print(uniqueEvents <- arrange(uniqueEvents, EVTYPE))
+
 ```
-There are 985 unique types of weather events captured in this data set, but 220 that have a fatality or injury. In examining these 220 events, it is apparent that many are near matches to each other, which probably resulted from data entry errors. So, for events that have any fatalities or injuries we need to map each unique value to the actual value as documented in the "NATIONAL WEATHER SERVICE INSTRUCTION 10-1605" document (available at this link: https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf). 
+There are 488 unique weather events that have a public health and/or economic. However, upon closer examination of this list, it is apparent that many are near matches to each other or are non-standard entries, which probably resulted from data entry errors. So, for events that have any health or economic impact, we need to map each unique value to the actual value as documented in the "NATIONAL WEATHER SERVICE INSTRUCTION 10-1605" document (available at this link: https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf). 
+
+To methodically work through and map all 488 unique events to a standard event, we'll use the following method
+1. Match to the NOAA event list to eliminate those that already match. 
+2. Iteratively work through the document using pattern matching and replacement commands to change groups of non-standard event names to standard event names. 
+3. Use the equivalent of a left outer join unmatch query in SQL to identify the remaining non-standard event names to map to standard names until all 488 are mapped. 
 
 ```{r}
+#read in list of NOAA event names from the document linked above
+noaaEvents <- read.csv("PA2_data/noaaevents.csv") 
+#change to character for easier manipulation
+noaaEvents$NoaaEvent <- as.character(noaaEvents$NoaaEvent) 
+#create column that will be used to map non-std events to std events
+uniqueEvents$noaaEvents <- uniqueEvents$EVTYPE 
+
+# change NOAA colums to upper case to enable better matching: 
+uniqueEvents$noaaEvents <- toupper(uniqueEvents$noaaEvents)
+noaaEvents$NoaaEvent <- toupper(noaaEvents$NoaaEvent)
+
+# use pattern matching to replace non-std events with std events
+uniqueEvents$noaaEvents <- gsub(".*TSTM WIND.*", "THUNDERSTORM WIND", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub("^TORNADO.*", "TORNADO", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub("^THU.*ST.*M.*W.*", "THUNDERSTORM WIND", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub(".*FIRE.*", "WILDFIRE", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub(".*FLASH.*FLOOD.*", "FLASH FLOOD", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub(".*FLOOD.*FLASH.*", "FLASH FLOOD", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub(".*COAST.*FLOOD.*", "COASTAL FLOOD", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub(".*HAIL.*", "HAIL", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub("^COLD.*", "COLD/WIND CHILL", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub("^SNOW.*", "HEAVY SNOW", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub("^HIGH WIND.*", "STRONG WIND", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub(".*SLIDE.*", "AVALANCHE", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub(".*EX.*COLD", "EXTREME COLD/WIND CHILL", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub(".*EX.*CHILL", "EXTREME COLD/WIND CHILL", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub(".*SWELL.*", "HIGH SURF", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub(".*HURRICANE.*", "HURRICANE (TYPHOON)", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub(".*LI.*ING.*", "LIGHTNING", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub("^HEAVY SNOW.*", "HEAVY SNOW", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub("^H.*VY RAIN.*", "HEAVY RAIN", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub("^TROPICAL STORM.*", "TROPICAL STORM", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub(".*H.*SURF.*", "HIGH SURF", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub("^FREEZING.*", "SLEET", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub("^WATERSPOUT.*", "WATERSPOUT", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub("^WIN.*MIX", "WINTER WEATHER", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub("^GUSTY.*WIND.*", "HIGH WIND", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub("^GRADIENT.*WIND.*", "STRONG WIND", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub("^COASTAL.*STORM", "STORM SURGE/TIDE", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub("WHIRLWIND", "TORNADO", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub("^WINTER STORM.*", "WINTER STORM", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub("^WIND.*", "HIGH WIND", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub("^URBAN.*", "FLASH FLOOD", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub("^R.*FLOOD.*", "FLOOD", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub("^TIDAL.*FLOOD.*", "COASTAL FLOOD", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub("^FR.*[E|T]", "FROST/FREEZE", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub(".*LAKE.*SNOW", "LAKE-EFFECT SNOW", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub("^L.*SNOW.*", "WINTER WEATHER", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub("^ICE [J|F].*", "DEBRIS FLOW", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub("^IC[E|Y].*", "ICE STORM", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub("^ST.*WINDS", "STRONG WIND", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub("^SEVERE THUNDERSTORM.*", "THUNDERSTORM WIND", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub("^MICROBURST.*", "THUNDERSTORM WIND", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub("^HYPOTHERMIA.*", "EXTREME COLD/WIND CHILL", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub("^HEAT.*", "HEAT", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub(".*HEAT$", "EXCESSIVE HEAT", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub("^GLAZE.*", "FREEZING FOG", uniqueEvents$noaaEvents)
+uniqueEvents$noaaEvents <- gsub("^MIXED.*", "WINTER WEATHER", uniqueEvents$noaaEvents)
+
+# find EVTYPES that do not currently match NOAA events
+anti_join(uniqueEvents, noaaEvents, by = c("noaaEvents" = "NoaaEvent"))
+
+
+
 #create a separate column to modify by copying and pasting EVTYPE
 data$noaaEvent <- data$EVTYPE
+
 #modify non-standard event names to NOAA standard event names
 data$noaaEvent <- gsub("AVALANCE", "AVALANCHE", data$noaaEvent)
 data$noaaEvent <- gsub("BLACK ICE", "ICE STORM", data$noaaEvent)
 data$noaaEvent <- gsub("blowing snow", "BLIZZARD", data$noaaEvent, ignore.case = TRUE)
 data$noaaEvent <- gsub("BRUSH FIRE", "WILDFIRE", data$noaaEvent)
-data$noaaEvent <- gsub("^Coastal Flooding", "COASTAL FLOOD", data$noaaEvent, ignore.case = TRUE)
-data$noaaEvent <- gsub("Coastal Storm", "TROPICAL STORM", data$noaaEvent, ignore.case = TRUE)
+data$noaaEvent <- gsub("^Coastal Flood", "COASTAL FLOOD", data$noaaEvent, ignore.case = TRUE)
+data$noaaEvent <- gsub("COASTAL FLOOD/EROSION", "COASTAL FLOOD", data$noaaEvent)
+data$noaaEvent <- gsub("Coastal Storm", "TROPICAL STORM", data$noaaEvent)
 data$noaaEvent <- gsub("COASTALSTORM", "TROPICAL STORM", data$noaaEvent)
 data$noaaEvent <- gsub("^COLD", "COLD/WIND CHILL", data$noaaEvent, ignore.case = TRUE)
 data$noaaEvent <- gsub("DROUGHT/EXCESSIVE HEAT", "DROUGHT", data$noaaEvent)
@@ -75,6 +144,24 @@ data$noaaEvent <- gsub("^FLOOD", "FLOOD", data$noaaEvent)
 
 uniqueNoaaEvents <- unique(subset(data, FATALITIES >0|INJURIES > 0, select = "noaaEvent"))
 head(arrange(uniqueNoaaEvents, noaaEvent), 20)
+
+```
+The data frame noaaEvents now maps the non-standard event names from the original names to the standard NOAA event names. Now we need to associate the standard event names with their corresponding records in the data table. 
+```{r}
+
+```
+
+
+##Results
+This section walks through the various analytical steps to address the two questions in this assignment: 
+1. Across the United States, which types of events are most harmful with respect to population health?
+2. Across the United States, which types of events have the greatest economic consequences?
+
+###Storm Impact on Public Health
+This section examines the impact of severe weather events on public health.  
+
+```{r}
+
 ```
 
 
