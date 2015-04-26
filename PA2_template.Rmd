@@ -2,26 +2,25 @@
 title: 'Peer Assessment 2: Storm Data Analysis'
 author: "Travis Fell"
 date: "Monday, April 20, 2015"
-output: html_document
+output: pdf_document
 ---
 
 ##Synopsis
-This analysis is meant to shed light on the consequences of severe atmospheric events for public health and economic activity.  
+This analysis is meant to shed light on the consequences of severe atmospheric events for public health and economic activity. This data required extensive analysis and processing to properly categorize public health and economic impacts by valid NOAA event type descriptions. By far, the leading public health casualty (fatalities plus injuries) event was tornados, accounting for 62.3% of all severe weather-related casualties. Excessive heat was next at 7/9%. Economic impact was more distributed amongst different events. Floods acounted for 33.8% of all economic losses due to severe weather, hurricanes 19.1%, tornados 12%, storm surge/tide 10.1% and hail 4%. 
+
 
 ##Data Processing
 This section describes how the data for this analysis was acquired and made usable. 
 
 First, the environment needs to be prepped by loading needed packages, turning off scientific notation. Assuming the data has been downloaded to a folder one level below the working directory called PA2_data, read in the data. 
 
-```{r cache=TRUE}
+```{r cache=TRUE, message = FALSE}
 knitr::opts_chunk$set(fig.width=12, fig.height=8, fig.path='figure/')
 library(dplyr)
 options(dplyr.width = Inf) #ensure all columns show in tables made by dplyr fxn
-#library(plyr)
 library(ggplot2)
 options(scipen=999) #disable scientific notation
 data <- read.csv("./PA2_data/repdata-data-StormData.csv.bz2", as.is = TRUE, stringsAsFactors = FALSE)
-
 ```
 Upon reading in the data, do some intial analysis on the state of the data.
 ```{r}
@@ -38,14 +37,9 @@ str(data)
 Both analysis in this assignement look at results from certain weather events. So we'll look more closely at the EVTYPE column. Specifically, we'll find the unique list of those events that have any public health and/or economic impact, and ensure those events match the standard event descriptions from NOAA. For this analysis, we'll assume that events with at least 1 fatality or one injury have a public health impact and events with greater than 0 property damage or greater than 0 crop damage have an economic impact.
 
 ```{r}
-unique(data$PROPDMGEXP) #understand what is in this column
-unique(data$CROPDMGEXP) #understand what is in this column
-
 uniqueEvents <- unique(subset(data, FATALITIES >0|INJURIES > 0|PROPDMG > 0|CROPDMG > 0, select = "EVTYPE"))
-#uniqueEvents[order(uniqueEvents$EVTYPE)]
-#print(uniqueEvents <- arrange(uniqueEvents, EVTYPE))
-
 ```
+
 There are 488 unique weather events that have a public health and/or economic. However, upon closer examination of this list, it is apparent that many are near matches to each other or are non-standard entries. So, for events that have any health or economic impact, we need to map each unique value to the actual value as documented in the "NATIONAL WEATHER SERVICE INSTRUCTION 10-1605" document (available at this link: https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf). 
 
 To methodically work through and map all 488 unique events to a standard event, we'll use the following method
@@ -53,7 +47,7 @@ To methodically work through and map all 488 unique events to a standard event, 
 2. Iteratively work through the document using pattern matching and replacement commands to change groups of non-standard event names to standard event names. 
 3. Use the equivalent of a left outer join unmatch query in SQL to identify the remaining non-standard event names to map to standard names until all 488 are mapped. 
 
-```{r}
+```{r , results = FALSE, messages = FALSE}
 #create column that will be used to map non-std events to std events
 uniqueEvents$noaaEvents <- uniqueEvents$EVTYPE 
 
@@ -168,13 +162,56 @@ uniqueEvents$noaaEvents <- gsub("UNSEASONAL RAIN", "HEAVY RAIN", uniqueEvents$no
 uniqueEvents$noaaEvents <- gsub("WARM WEATHER", "HEAT", uniqueEvents$noaaEvents)
 
 # find EVTYPES that do not currently match NOAA events
+library(dplyr)
 anti_join(uniqueEvents, noaaEvents, by = c("noaaEvents" = "NoaaEvent"))
 ```
-The data frame uniqueEvents now maps the non-standard event names with any health or economic impact to standard NOAA event names. Now we need to associate the standard event names with their corresponding records in the data table. We will do this by creating a column for standard events in the data data frame called "noaaEvent" by merging the uniqueEvents data frame on to the data data frame on the EVTYPE column and populuating the noaaEvent column with the stadard event type that matches the given EVTYPE. We will t hen convert the noaaEvent column to a factor data type for further analysis. 
+The data frame uniqueEvents now maps the non-standard event names with any health or economic impact to standard NOAA event names. Now we need to associate the standard event names with their corresponding records in the data table. We will do this by creating a column for standard events in the data data frame called "noaaEvent" by merging the uniqueEvents data frame on to the data data frame on the EVTYPE column and populuating the noaaEvent column with the stadard event type that matches the given EVTYPE. We will then convert the noaaEvent column to a factor data type for further analysis. 
 ```{r}
 # create blank column to populate with standard event names
 data$noaaEvent <- uniqueEvents[match(data$EVTYPE, uniqueEvents$EVTYPE),2]
 data$noaaEvent <- as.factor(data$noaaEvent)
+```
+
+We'll also have a quick look at the property damage and crop damage exponent columns. 
+
+```{r}
+unique(data$PROPDMGEXP) #understand what is in this column
+unique(data$CROPDMGEXP) #understand what is in this column
+```
+Looks like these columns are units of measure (billions, millions, thousands, hundreds) in both upper and lower case along with some junk data mixed in. After setting both columns to uppercase, let's try to narrow down the junk data we need to fix by analyzing if any junk values are associated with crop or property damage values.
+
+```{r}
+# set both columns to upper case
+data$CROPDMGEXP <- toupper(data$CROPDMGEXP)
+data$PROPDMGEXP <- toupper(data$PROPDMGEXP)
+
+print(cropDmgExpWithImpact <-unique(subset(data, CROPDMG > 0 & !(CROPDMGEXP %in% c("B","M","K","H")), select = "CROPDMGEXP")))
+print(PropDmgExpWithImpact <-unique(subset(data, PROPDMG > 0 & !(PROPDMGEXP %in% c("B","M","K","H")), select = "PROPDMGEXP")))
+```
+So, CROPDMGEXP has two values (0 and blank) for records with crop damage that need to be addressed. PROPDMGEXP has 11. 
+
+To understand the impact of this junk data, we'll look at the magnitude of damage estimates associated with each unique exponent value. 
+```{r}
+summarize(group_by(data, CROPDMGEXP), sum(CROPDMG))
+summarize(group_by(data, PROPDMGEXP), sum(PROPDMG))
+```
+For both the CROPDMGEXP and PROPDMGEXP, it appears that the sum of damage values for exponent values not equal to "B", "M", "K", or "H" is dramatically lower than the sum of values that do equal "B", "M", "K", or "H". Therefore, for the remaining analysis, we will simply exclude records where the exponent values are not equal to "B", "M", "K", or "H" . 
+
+Finally, before proceeding with the economic impact analysis, we will create a separate column for both crop damage and property damage that uses the multiplies the damage column by the appropriate value indicated by the exponent column to determine the full value for event using a common scale. 
+```{r}
+#calculate adjusted crop damage
+data$ADJCROPDMG <- as.numeric(0)
+data[which(data$CROPDMGEXP=="B"),39] <- data[which(data$CROPDMGEXP=="B"),27] * 1000000000
+data[which(data$CROPDMGEXP=="M"),39] <- data[which(data$CROPDMGEXP=="M"),27] * 1000000
+data[which(data$CROPDMGEXP=="K"),39] <- data[which(data$CROPDMGEXP=="K"),27] * 1000
+data[which(data$CROPDMGEXP=="H"),39] <- data[which(data$CROPDMGEXP=="H"),27] * 100
+
+#calculate adjusted property damage
+data$ADJPROPDMG <- as.numeric(0)
+data[which(data$PROPDMGEXP=="B"),40] <- data[which(data$PROPDMGEXP=="B"),25] * 1000000000
+data[which(data$PROPDMGEXP=="M"),40] <- data[which(data$PROPDMGEXP=="M"),25] * 1000000
+data[which(data$PROPDMGEXP=="K"),40] <- data[which(data$PROPDMGEXP=="K"),25] * 1000
+data[which(data$PROPDMGEXP=="H"),40] <- data[which(data$PROPDMGEXP=="H"),25] * 100
 ```
 
 ##Results
@@ -186,7 +223,9 @@ This section walks through the various analytical steps to address the two quest
 This section examines the impact of severe weather events on public health. To start digging into the results, we'll summarize the total fatalities and injuries by EVTYPE and give the resulting set meaningful column names. 
 
 ```{r}
+library(dplyr)
 health <- summarise(group_by(data, noaaEvent), sum(FATALITIES), sum(INJURIES))
+health <- as.data.frame(health)
 colnames(health)[2:3] <- c("FATALITIES", "INJURIES")
 ```
 Now that the health data is in a summarized, human readable format, we will start examining it's parameters to get a feel for how to continue the analysis. We will identify the total number of fatalities/injuries, examine the top 10 events by number of fatalities and injuries. 
@@ -196,16 +235,35 @@ head(arrange(health, desc(INJURIES)), 10)
 ```
 Now, we'll combine fatalities and injuries into a "total casualties" column then calculate each event's casualties as a percent of the whole and draw some conclusions about storm impacts on public health. 
 ```{r}
+library(ggplot2)
 health <- mutate(health, CASUALTIES = FATALITIES + INJURIES)
 totalCasualties <- sum(health$CASUALTIES)
 health <- mutate(health, CASUALTYPERCENT = round(100 * CASUALTIES/totalCasualties, digits = 1))
 print(topCasualtyEvents <- head(arrange(health, desc(CASUALTYPERCENT)), 10))
-top10CombinedPercent <- sum(topCasualtyEvents$CASUALTYPERCENT)
+top10CombinedPercentHealth <- sum(topCasualtyEvents$CASUALTYPERCENT)
+ggplot(dat=topCasualtyEvents, aes(x=noaaEvent, y=CASUALTYPERCENT)) + geom_bar(stat="identity") + ggtitle("Percent casualties by event, 1950-2011") + theme(axis.text.x=element_text(angle = 45, hjust = 1))
 ```
 Assuming that public health impact is measured by the combination of fatalities and injuries, the chart above shows that tornados are far and away the biggest threat to public health from severe weather. As the top 10 events account for `r top10CombinedPercent`% of weather-related casualties, public health and safety officials should develop contingency plans for all these events, though with emphasis on tornados.  
 
 ### Economic Impact of Severe Weather Events
-We will now examine the economic impact of severe weather events. For the purposes of this analysis, we will combine the dollar value of crop damage with the dollar value of property damage to 
+We will now examine the economic impact of severe weather events. For the purposes of this analysis, we will combine the dollar value of crop damage with the dollar value of property damage to ascertain the total economic impact of each type of severe weather event. Then calculate each event's dollar value impact as a percent of the whole and draw some conclusions about storm impacts on public health.
 
+```{r}
+library(ggplot2)
+library(scales)
+#calculate total economic impact
+data$TOTALECONDMG <- data$ADJCROPDMG + data$ADJPROPDMG  
+totalDMG <- sum(data$TOTALECONDMG)
+econ <- summarize(group_by(data, noaaEvent), sum(TOTALECONDMG))
+colnames(econ)[2] <- "ECONOMICDAMAGE"
+econ <- mutate(econ, DMGPERCENT = round(100 * ECONOMICDAMAGE/totalDMG, digits = 1))
+econ$ECONOMICDAMAGE <- dollar(econ$ECONOMICDAMAGE)
+print(topEconomicEvents <- head(arrange(econ, desc(DMGPERCENT)), 10))
+top10CombinedPercentEcon <- sum(topEconomicEvents$DMGPERCENT)
+
+ggplot(dat=topEconomicEvents, aes(x=noaaEvent, y=DMGPERCENT)) + geom_bar(stat="identity") + ggtitle("Percent economic impact by event, 1950-2011") + theme(axis.text.x=element_text(angle = 45, hjust = 1))
+```
+
+Unlike the severe weather events with public health impact, the economic impact of severe weather is more evenly distributed among distinct events. Thus, public officials would need to "cast a wider net" with respect to these events to help prevent or minimize the damage. Specifically, public officials would be well advised to prioritize investments in damage prevention and rapid response measures for floods, hurricanes, tornadoes and storm surges. Additionally, some mitigation strategies for hail, flash flood, drough, thunderstorm wind, ice storms and wildfires would also be prudent. These 10 types of events comprise `r top10CombinedPercentEcon`% of all economic impact from severe weather events. 
 
 
